@@ -1,8 +1,10 @@
+
+            
 package com.mist.launcher
 
 import android.content.Intent
-import android.os.Bundle
 import android.content.pm.ResolveInfo
+import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -11,9 +13,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -29,30 +33,32 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+
+        val installedApps = packageManager
+            .queryIntentActivities(launcherIntent, 0)
+            .filter {
+                it.activityInfo.packageName != packageName
+            }
+            .distinctBy {
+                it.activityInfo.packageName
+            }
+            .sortedBy {
+                it.loadLabel(packageManager).toString().lowercase()
+            }
+
         setContent {
             MistHome(
-                onOpenApp = { packageName ->
+                apps = installedApps,
+                onOpenApp = { appPackage ->
                     val launchIntent =
-                        packageManager.getLaunchIntentForPackage(packageName)
+                        packageManager.getLaunchIntentForPackage(appPackage)
 
-                    launchIntent?.let { startActivity(it) }
-                },
-                apps = remember {
-                    val intent = Intent(Intent.ACTION_MAIN).apply {
-                        addCategory(Intent.CATEGORY_LAUNCHER)
+                    launchIntent?.let {
+                        startActivity(it)
                     }
-
-                    packageManager.queryIntentActivities(intent, 0)
-                        .filter {
-                            it.activityInfo.packageName != packageName
-                        }
-                        .distinctBy {
-                            it.activityInfo.packageName
-                        }
-                        .sortedBy {
-                            it.loadLabel(packageManager).toString()
-                                .lowercase()
-                        }
                 }
             )
         }
@@ -64,12 +70,16 @@ fun MistHome(
     apps: List<ResolveInfo>,
     onOpenApp: (String) -> Unit
 ) {
-    var search by remember { mutableStateOf("") }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
-    val filteredApps = apps.filter {
-        it.loadLabel(
-            androidx.compose.ui.platform.LocalContext.current.packageManager
-        ).toString().contains(search, ignoreCase = true)
+    var search by remember {
+        mutableStateOf("")
+    }
+
+    val filteredApps = apps.filter { app ->
+        app.loadLabel(context.packageManager)
+            .toString()
+            .contains(search, ignoreCase = true)
     }
 
     MaterialTheme {
@@ -81,7 +91,7 @@ fun MistHome(
                 .navigationBarsPadding()
                 .padding(horizontal = 22.dp)
         ) {
-            Spacer(Modifier.height(30.dp))
+            Spacer(modifier = Modifier.height(30.dp))
 
             Text(
                 text = "M I S T",
@@ -95,7 +105,7 @@ fun MistHome(
                 fontSize = 14.sp
             )
 
-            Spacer(Modifier.height(45.dp))
+            Spacer(modifier = Modifier.height(45.dp))
 
             Text(
                 text = "Your space.",
@@ -109,7 +119,7 @@ fun MistHome(
                 fontSize = 14.sp
             )
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             OutlinedTextField(
                 value = search,
@@ -122,14 +132,16 @@ fun MistHome(
                 shape = RoundedCornerShape(20.dp)
             )
 
-            Spacer(Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.weight(1f)
             ) {
                 items(filteredApps) { app ->
+
                     val name = app.loadLabel(
-                        androidx.compose.ui.platform.LocalContext.current.packageManager
+                        context.packageManager
                     ).toString()
 
                     Surface(
@@ -138,7 +150,9 @@ fun MistHome(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                onOpenApp(app.activityInfo.packageName)
+                                onOpenApp(
+                                    app.activityInfo.packageName
+                                )
                             }
                     ) {
                         Text(
