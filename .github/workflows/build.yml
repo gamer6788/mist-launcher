@@ -1,4 +1,6 @@
 
+
+      
 name: Build MIST
 
 on:
@@ -37,7 +39,7 @@ jobs:
         with:
           gradle-version: 8.9
 
-      - name: Build APK
+      - name: Build MIST APK
         run: gradle assembleDebug
 
       - name: Upload MIST APK
@@ -45,3 +47,4 @@ jobs:
         with:
           name: MIST-Launcher-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
