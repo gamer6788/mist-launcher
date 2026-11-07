@@ -753,3 +753,36 @@ private fun SingularityAtmosphere(
     }
 }
 
+@Composable
+private fun HeaderAction(
+    symbol: String,
+    onClick: () -> Unit
+) {
+    SmallAction(symbol, onClick)
+}
+
+@Composable
+private fun ScreenHeader(
+    title: String,
+    onBack: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SmallAction("‹", onBack)
+
+        Spacer(Modifier.width(16.dp))
+
+        Text(
+            title.uppercase(),
+            fontSize = 13.sp,
+            letterSpacing = 2.sp,
+            color = Color.White,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
