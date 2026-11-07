@@ -2,16 +2,20 @@
             
 
 
+
 package com.mist.launcher
 
 import android.content.Intent
 import android.content.pm.ResolveInfo
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.drawable.Drawable
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -19,37 +23,33 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.*
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Path
-import androidx.compose.foundation.Canvas
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val MistBackground = Color(0xFF08111C)
-private val MistPanel = Color(0xCC1A2938)
-private val MistText = Color(0xFFE8EEF5)
-private val MistMuted = Color(0xFFA7B7C8)
-private val MistSilver = Color(0xFFC5D4E3)
+private val Obsidian = Color(0xFF080D16)
+private val Silver = Color(0xFFE1EAF3)
+private val MistBlue = Color(0xFF9BBBD4)
+private val Muted = Color(0xFF9BAFC0)
+private val Glass = Color(0xB51B2B3D)
 
 class MainActivity : ComponentActivity() {
 
-    private fun getApps(): List<ResolveInfo> {
+    private fun loadApps(): List<ResolveInfo> {
         val intent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
         }
@@ -65,19 +65,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        window.statusBarColor = android.graphics.Color.rgb(8, 17, 28)
-        window.navigationBarColor = android.graphics.Color.rgb(8, 17, 28)
+        window.statusBarColor = android.graphics.Color.rgb(8, 13, 22)
+        window.navigationBarColor = android.graphics.Color.rgb(8, 13, 22)
 
         setContent {
-            var apps by remember { mutableStateOf(getApps()) }
+            var apps by remember { mutableStateOf(loadApps()) }
 
-            MistLauncher(
+            MistHome(
                 apps = apps,
+                onRefresh = { apps = loadApps() },
                 onOpenApp = { packageName ->
-                    val launchIntent =
-                        packageManager.getLaunchIntentForPackage(packageName)
-
-                    launchIntent?.let { startActivity(it) }
+                    packageManager.getLaunchIntentForPackage(packageName)
+                        ?.let { startActivity(it) }
                 }
             )
         }
@@ -85,70 +84,42 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MistLauncher(
+private fun MistHome(
     apps: List<ResolveInfo>,
+    onRefresh: () -> Unit,
     onOpenApp: (String) -> Unit
 ) {
-    var showDrawer by remember { mutableStateOf(false) }
+    var drawerOpen by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf("") }
-
-    var clock by remember {
-        mutableStateOf(
-            SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-        )
-    }
-
-    var date by remember {
-        mutableStateOf(
-            SimpleDateFormat("EEEE, d MMMM", Locale.getDefault())
-                .format(Date())
-        )
-    }
+    var clock by remember { mutableStateOf(currentTime()) }
+    var date by remember { mutableStateOf(currentDate()) }
 
     LaunchedEffect(Unit) {
         while (true) {
-            clock = SimpleDateFormat(
-                "HH:mm", Locale.getDefault()
-            ).format(Date())
-
-            date = SimpleDateFormat(
-                "EEEE, d MMMM", Locale.getDefault()
-            ).format(Date())
-
+            clock = currentTime()
+            date = currentDate()
             delay(30_000)
         }
     }
 
     val context = LocalContext.current
 
-    val filteredApps = apps.filter {
-        it.loadLabel(context.packageManager)
-            .toString()
-            .contains(search, ignoreCase = true)
+    val filteredApps = remember(apps, search) {
+        apps.filter {
+            it.loadLabel(context.packageManager)
+                .toString()
+                .contains(search, ignoreCase = true)
+        }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MistBackground)
-            .pointerInput(showDrawer) {
-                var totalDrag = 0f
-
-                detectVerticalDragGestures(
-                    onVerticalDrag = { _, amount ->
-                        totalDrag += amount
-                    },
-                    onDragEnd = {
-                        if (totalDrag < -80f) showDrawer = true
-                        if (totalDrag > 80f) showDrawer = false
-                        totalDrag = 0f
-                    }
-                )
-            }
+            .background(Obsidian)
     ) {
-        MistForestBackground()
+        ForestAtmosphere()
 
-        if (showDrawer) {
+        if (drawerOpen) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -156,43 +127,42 @@ fun MistLauncher(
                     .navigationBarsPadding()
                     .padding(horizontal = 22.dp)
             ) {
-                Spacer(Modifier.height(22.dp))
-
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 18.dp, bottom = 24.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
                         Text(
-                            "APPLICATIONS",
-                            color = MistSilver,
-                            fontSize = 12.sp,
-                            letterSpacing = 3.sp
+                            "M I S T",
+                            color = Silver,
+                            fontSize = 18.sp,
+                            letterSpacing = 5.sp
                         )
                         Text(
-                            "Your collection.",
-                            color = MistText,
-                            fontSize = 27.sp,
-                            fontFamily = FontFamily.Serif
+                            "APPLICATION LIBRARY",
+                            color = Muted,
+                            fontSize = 9.sp,
+                            letterSpacing = 2.sp
                         )
                     }
 
                     Text(
                         "CLOSE",
-                        color = MistMuted,
+                        color = MistBlue,
                         fontSize = 11.sp,
-                        modifier = Modifier.clickable {
-                            showDrawer = false
-                        }.padding(10.dp)
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable { drawerOpen = false }
+                            .padding(12.dp)
                     )
                 }
 
-                Spacer(Modifier.height(24.dp))
-
                 Surface(
-                    color = MistPanel,
-                    shape = RoundedCornerShape(18.dp),
+                    color = Glass,
+                    shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     BasicTextField(
@@ -200,30 +170,39 @@ fun MistLauncher(
                         onValueChange = { search = it },
                         singleLine = true,
                         textStyle = androidx.compose.ui.text.TextStyle(
-                            color = MistText,
+                            color = Silver,
                             fontSize = 15.sp
                         ),
-                        decorationBox = { innerTextField ->
+                        decorationBox = { inner ->
                             Box(Modifier.padding(17.dp)) {
                                 if (search.isEmpty()) {
                                     Text(
-                                        "Search your applications...",
-                                        color = MistMuted,
+                                        "Search applications",
+                                        color = Muted,
                                         fontSize = 14.sp
                                     )
                                 }
-                                innerTextField()
+                                inner()
                             }
                         }
                     )
                 }
 
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(22.dp))
+
+                Text(
+                    "${filteredApps.size} APPLICATIONS",
+                    color = Muted,
+                    fontSize = 10.sp,
+                    letterSpacing = 2.sp
+                )
+
+                Spacer(Modifier.height(14.dp))
 
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                    columns = GridCells.Fixed(4),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp),
                     modifier = Modifier.weight(1f)
                 ) {
                     items(
@@ -234,6 +213,12 @@ fun MistLauncher(
                             context.packageManager
                         ).toString()
 
+                        val icon = remember(app) {
+                            drawableBitmap(
+                                app.loadIcon(context.packageManager)
+                            )
+                        }
+
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
@@ -241,29 +226,21 @@ fun MistLauncher(
                                 .clickable {
                                     onOpenApp(app.activityInfo.packageName)
                                 }
-                                .padding(vertical = 8.dp)
                         ) {
-                            Box(
+                            androidx.compose.foundation.Image(
+                                bitmap = icon.asImageBitmap(),
+                                contentDescription = name,
                                 modifier = Modifier
-                                    .size(58.dp)
-                                    .clip(RoundedCornerShape(19.dp))
-                                    .background(MistPanel),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    name.take(1).uppercase(),
-                                    color = MistSilver,
-                                    fontSize = 24.sp,
-                                    fontFamily = FontFamily.Serif
-                                )
-                            }
+                                    .size(52.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                            )
 
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(7.dp))
 
                             Text(
                                 name,
-                                color = MistText,
-                                fontSize = 12.sp,
+                                color = Silver,
+                                fontSize = 10.sp,
                                 maxLines = 1
                             )
                         }
@@ -278,69 +255,94 @@ fun MistLauncher(
                     .navigationBarsPadding()
                     .padding(horizontal = 25.dp)
             ) {
-                Spacer(Modifier.height(27.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            "M I S T",
+                            color = Silver,
+                            fontSize = 18.sp,
+                            letterSpacing = 5.sp,
+                            fontWeight = FontWeight.Light
+                        )
+                        Text(
+                            "S I L E N T   F O R E S T",
+                            color = Muted,
+                            fontSize = 8.sp,
+                            letterSpacing = 2.sp
+                        )
+                    }
 
-                Text(
-                    "M I S T",
-                    color = MistSilver,
-                    fontSize = 17.sp,
-                    letterSpacing = 5.sp,
-                    fontWeight = FontWeight.Light
-                )
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(Glass),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("◐", color = MistBlue, fontSize = 19.sp)
+                    }
+                }
 
-                Text(
-                    "S I L E N T   F O R E S T",
-                    color = MistMuted,
-                    fontSize = 9.sp,
-                    letterSpacing = 2.sp
-                )
-
-                Spacer(Modifier.height(75.dp))
-
-                Text(
-                    clock,
-                    color = MistText,
-                    fontSize = 76.sp,
-                    fontWeight = FontWeight.Light,
-                    fontFamily = FontFamily.Serif
-                )
+                Spacer(Modifier.height(48.dp))
 
                 Text(
                     date.uppercase(),
-                    color = MistSilver,
-                    fontSize = 11.sp,
+                    color = MistBlue,
+                    fontSize = 10.sp,
                     letterSpacing = 2.sp
                 )
 
-                Spacer(Modifier.height(38.dp))
+                Text(
+                    clock,
+                    color = Silver,
+                    fontSize = 76.sp,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Light,
+                    letterSpacing = (-3).sp
+                )
+
+                Text(
+                    "FIND YOUR STILLNESS.",
+                    color = Muted,
+                    fontSize = 9.sp,
+                    letterSpacing = 3.sp
+                )
+
+                Spacer(Modifier.height(30.dp))
 
                 Surface(
-                    color = MistPanel,
-                    shape = RoundedCornerShape(22.dp),
+                    color = Glass,
+                    shape = RoundedCornerShape(25.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(Modifier.padding(20.dp)) {
                         Text(
                             "THE SILENT FOREST",
-                            color = MistSilver,
-                            fontSize = 10.sp,
+                            color = MistBlue,
+                            fontSize = 9.sp,
                             letterSpacing = 2.sp
                         )
 
-                        Spacer(Modifier.height(9.dp))
+                        Spacer(Modifier.height(10.dp))
 
                         Text(
-                            "A quieter way to exist.",
-                            color = MistText,
+                            "A world away from the noise.",
+                            color = Silver,
                             fontSize = 21.sp,
                             fontFamily = FontFamily.Serif
                         )
 
-                        Spacer(Modifier.height(5.dp))
+                        Spacer(Modifier.height(7.dp))
 
                         Text(
-                            "Find your space. Leave the noise behind.",
-                            color = MistMuted,
+                            "Take a moment. Breathe.",
+                            color = Muted,
                             fontSize = 12.sp
                         )
                     }
@@ -348,23 +350,46 @@ fun MistLauncher(
 
                 Spacer(Modifier.weight(1f))
 
-                Text(
-                    "YOUR APPLICATIONS",
-                    color = MistMuted,
-                    fontSize = 10.sp,
-                    letterSpacing = 2.sp
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "YOUR FAVOURITES",
+                        color = Muted,
+                        fontSize = 9.sp,
+                        letterSpacing = 2.sp
+                    )
 
-                Spacer(Modifier.height(15.dp))
+                    Text(
+                        "ALL APPS ↗",
+                        color = MistBlue,
+                        fontSize = 9.sp,
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.clickable {
+                            search = ""
+                            onRefresh()
+                            drawerOpen = true
+                        }
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(13.dp)
                 ) {
-                    apps.take(4).forEach { app ->
+                    apps.take(5).forEach { app ->
                         val name = app.loadLabel(
                             context.packageManager
                         ).toString()
+
+                        val icon = remember(app) {
+                            drawableBitmap(
+                                app.loadIcon(context.packageManager)
+                            )
+                        }
 
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -374,43 +399,37 @@ fun MistLauncher(
                                     onOpenApp(app.activityInfo.packageName)
                                 }
                         ) {
-                            Box(
+                            androidx.compose.foundation.Image(
+                                bitmap = icon.asImageBitmap(),
+                                contentDescription = name,
                                 modifier = Modifier
-                                    .size(55.dp)
-                                    .clip(RoundedCornerShape(18.dp))
-                                    .background(MistPanel),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    name.take(1).uppercase(),
-                                    color = MistSilver,
-                                    fontSize = 23.sp,
-                                    fontFamily = FontFamily.Serif
-                                )
-                            }
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(15.dp))
+                            )
 
-                            Spacer(Modifier.height(7.dp))
+                            Spacer(Modifier.height(6.dp))
 
                             Text(
                                 name,
-                                color = MistText,
-                                fontSize = 10.sp,
+                                color = Silver,
+                                fontSize = 9.sp,
                                 maxLines = 1
                             )
                         }
                     }
                 }
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(22.dp))
 
                 Surface(
-                    color = Color(0xDD263748),
+                    color = Color(0xD927394B),
                     shape = RoundedCornerShape(25.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
                             search = ""
-                            showDrawer = true
+                            onRefresh()
+                            drawerOpen = true
                         }
                 ) {
                     Row(
@@ -419,73 +438,129 @@ fun MistLauncher(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "⌕    EXPLORE ALL APPLICATIONS",
-                            color = MistText,
-                            fontSize = 12.sp,
-                            letterSpacing = 1.sp
+                            "⌕    EXPLORE APPLICATIONS",
+                            color = Silver,
+                            fontSize = 11.sp,
+                            letterSpacing = 1.5.sp
                         )
                     }
                 }
 
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(15.dp))
 
                 Text(
-                    "SWIPE UP TO EXPLORE",
-                    color = MistMuted,
-                    fontSize = 9.sp,
+                    "M I S T   •   F U S I O N",
+                    color = Muted,
+                    fontSize = 8.sp,
                     letterSpacing = 2.sp,
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 )
 
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(12.dp))
             }
         }
     }
 }
 
+private fun currentTime(): String =
+    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+
+private fun currentDate(): String =
+    SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date())
+
+private fun drawableBitmap(drawable: Drawable): Bitmap {
+    val width = drawable.intrinsicWidth.coerceAtLeast(1)
+    val height = drawable.intrinsicHeight.coerceAtLeast(1)
+    val bitmap = Bitmap.createBitmap(
+        width.coerceAtMost(192),
+        height.coerceAtMost(192),
+        Bitmap.Config.ARGB_8888
+    )
+    val canvas = AndroidCanvas(bitmap)
+    drawable.setBounds(0, 0, canvas.width, canvas.height)
+    drawable.draw(canvas)
+    return bitmap
+}
+
 @Composable
-fun MistForestBackground() {
-    Canvas(modifier = Modifier.fillMaxSize()) {
+private fun ForestAtmosphere() {
+    Canvas(Modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
+
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF080D16),
+                    Color(0xFF101D2A),
+                    Color(0xFF09131D)
+                )
+            )
+        )
 
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    Color(0x303D607B),
+                    Color(0x405C829F),
                     Color.Transparent
                 ),
-                center = Offset(w * 0.55f, h * 0.48f),
-                radius = w * 0.8f
+                center = androidx.compose.ui.geometry.Offset(
+                    w * 0.72f,
+                    h * 0.45f
+                ),
+                radius = w * 0.65f
             ),
-            radius = w * 0.8f,
-            center = Offset(w * 0.55f, h * 0.48f)
+            radius = w * 0.65f,
+            center = androidx.compose.ui.geometry.Offset(
+                w * 0.72f,
+                h * 0.45f
+            )
         )
 
-        val farHill = Path().apply {
-            moveTo(0f, h * 0.67f)
-            cubicTo(w * 0.3f, h * 0.54f, w * 0.6f, h * 0.72f, w, h * 0.57f)
-            lineTo(w, h)
-            lineTo(0f, h)
-            close()
+        // Distant forest silhouettes
+        for (i in 0..9) {
+            val x = w * i / 9f
+            val base = h * (0.78f + (i % 3) * 0.025f)
+            val treeHeight = h * (0.16f + (i % 4) * 0.025f)
+
+            val tree = Path().apply {
+                moveTo(x, base - treeHeight)
+                lineTo(x - w * 0.065f, base)
+                lineTo(x + w * 0.065f, base)
+                close()
+            }
+
+            drawPath(tree, Color(0xFF142332))
         }
 
-        drawPath(farHill, Color(0xFF101F2B))
+        // Foreground forest
+        for (i in 0..7) {
+            val x = w * i / 7f
+            val base = h * 0.91f
+            val treeHeight = h * (0.23f + (i % 3) * 0.035f)
 
-        val nearHill = Path().apply {
-            moveTo(0f, h * 0.79f)
-            cubicTo(w * 0.35f, h * 0.66f, w * 0.7f, h * 0.84f, w, h * 0.72f)
-            lineTo(w, h)
-            lineTo(0f, h)
-            close()
+            val tree = Path().apply {
+                moveTo(x, base - treeHeight)
+                lineTo(x - w * 0.085f, base)
+                lineTo(x + w * 0.085f, base)
+                close()
+            }
+
+            drawPath(tree, Color(0xFF0A1520))
         }
 
-        drawPath(nearHill, Color(0xFF091722))
-
-        drawCircle(
-            color = Color(0x183D6278),
-            radius = w * 0.35f,
-            center = Offset(w * 0.5f, h * 0.78f)
+        // Static mist layers
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    Color.Transparent,
+                    Color(0x183D6079),
+                    Color(0x080B1723),
+                    Color.Transparent
+                ),
+                startY = h * 0.65f,
+                endY = h * 0.95f
+            )
         )
     }
 }
