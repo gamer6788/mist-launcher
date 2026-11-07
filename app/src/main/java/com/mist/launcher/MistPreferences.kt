@@ -7,125 +7,114 @@ data class MistUserPreferences(
     val theme: MistTheme = MistTheme.SINGULARITY,
     val graphicsMode: MistGraphicsMode = MistGraphicsMode.PHANTOM,
     val introEnabled: Boolean = true,
-    val reducedMotion: Boolean = false
+    val reducedMotion: Boolean = false,
+    val glowEnabled: Boolean = true,
+    val backgroundAnimationEnabled: Boolean = true
 )
 
 object MistPreferences {
 
     private const val PREFS_NAME = "mist_user_preferences"
 
-    private const val KEY_THEME = "selected_theme"
-    private const val KEY_GRAPHICS = "selected_graphics"
-    private const val KEY_INTRO = "intro_enabled"
+    private const val KEY_THEME = "theme"
+    private const val KEY_GRAPHICS_MODE = "graphics_mode"
+    private const val KEY_INTRO_ENABLED = "intro_enabled"
     private const val KEY_REDUCED_MOTION = "reduced_motion"
+    private const val KEY_GLOW_ENABLED = "glow_enabled"
+    private const val KEY_BACKGROUND_ANIMATION = "background_animation"
 
-    private fun preferences(context: Context) =
-        context.applicationContext.getSharedPreferences(
+    private fun prefs(context: Context) =
+        context.getSharedPreferences(
             PREFS_NAME,
             Context.MODE_PRIVATE
         )
 
-    /**
-     * Load all saved MIST preferences.
-     */
     fun load(context: Context): MistUserPreferences {
-        val prefs = preferences(context)
-
-        val themeName = prefs.getString(
-            KEY_THEME,
-            MistTheme.SINGULARITY.name
-        )
-
-        val graphicsName = prefs.getString(
-            KEY_GRAPHICS,
-            MistGraphicsMode.PHANTOM.name
-        )
+        val preferences = prefs(context)
 
         val theme = runCatching {
             MistTheme.valueOf(
-                themeName ?: MistTheme.SINGULARITY.name
+                preferences.getString(
+                    KEY_THEME,
+                    MistTheme.SINGULARITY.name
+                )!!
             )
         }.getOrDefault(MistTheme.SINGULARITY)
 
-        val graphics = runCatching {
+        val graphicsMode = runCatching {
             MistGraphicsMode.valueOf(
-                graphicsName ?: MistGraphicsMode.PHANTOM.name
+                preferences.getString(
+                    KEY_GRAPHICS_MODE,
+                    MistGraphicsMode.PHANTOM.name
+                )!!
             )
         }.getOrDefault(MistGraphicsMode.PHANTOM)
 
         return MistUserPreferences(
             theme = theme,
-            graphicsMode = graphics,
-            introEnabled = prefs.getBoolean(
-                KEY_INTRO,
+            graphicsMode = graphicsMode,
+            introEnabled = preferences.getBoolean(
+                KEY_INTRO_ENABLED,
                 true
             ),
-            reducedMotion = prefs.getBoolean(
+            reducedMotion = preferences.getBoolean(
                 KEY_REDUCED_MOTION,
                 false
+            ),
+            glowEnabled = preferences.getBoolean(
+                KEY_GLOW_ENABLED,
+                true
+            ),
+            backgroundAnimationEnabled = preferences.getBoolean(
+                KEY_BACKGROUND_ANIMATION,
+                true
             )
         )
     }
 
-    /**
-     * Save selected theme.
-     */
-    fun saveTheme(
-        context: Context,
-        theme: MistTheme
-    ) {
-        preferences(context)
-            .edit()
+    fun saveTheme(context: Context, theme: MistTheme) {
+        prefs(context).edit()
             .putString(KEY_THEME, theme.name)
             .apply()
     }
 
-    /**
-     * Save graphics intensity independently.
-     */
     fun saveGraphicsMode(
         context: Context,
         mode: MistGraphicsMode
     ) {
-        preferences(context)
-            .edit()
-            .putString(KEY_GRAPHICS, mode.name)
+        prefs(context).edit()
+            .putString(KEY_GRAPHICS_MODE, mode.name)
             .apply()
     }
 
-    /**
-     * Enable or disable the Singularity opening animation.
-     */
-    fun saveIntroEnabled(
-        context: Context,
-        enabled: Boolean
-    ) {
-        preferences(context)
-            .edit()
-            .putBoolean(KEY_INTRO, enabled)
+    fun saveIntroEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_INTRO_ENABLED, enabled)
             .apply()
     }
 
-    /**
-     * Save reduced-motion preference.
-     */
-    fun saveReducedMotion(
-        context: Context,
-        enabled: Boolean
-    ) {
-        preferences(context)
-            .edit()
+    fun saveReducedMotion(context: Context, enabled: Boolean) {
+        prefs(context).edit()
             .putBoolean(KEY_REDUCED_MOTION, enabled)
             .apply()
     }
 
-    /**
-     * Reset all preferences to MIST defaults.
-     */
-    fun reset(context: Context) {
-        preferences(context)
-            .edit()
-            .clear()
+    fun saveGlowEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_GLOW_ENABLED, enabled)
             .apply()
+    }
+
+    fun saveBackgroundAnimationEnabled(
+        context: Context,
+        enabled: Boolean
+    ) {
+        prefs(context).edit()
+            .putBoolean(KEY_BACKGROUND_ANIMATION, enabled)
+            .apply()
+    }
+
+    fun reset(context: Context) {
+        prefs(context).edit().clear().apply()
     }
 }
