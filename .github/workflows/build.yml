@@ -41,7 +41,7 @@ jobs:
           gradle-version: 8.9
 
       - name: Build MIST APK
-        run: gradle assembleDebug
+        run: gradle --stop && gradle clean assembleDebug --no-build-cache --rerun-tasks -Pkotlin.incremental=false
 
       - name: Upload MIST APK
         uses: actions/upload-artifact@v4
