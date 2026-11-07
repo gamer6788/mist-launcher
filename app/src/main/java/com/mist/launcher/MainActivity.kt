@@ -682,3 +682,74 @@ Spacer(Modifier.height(12.dp))
         }
     }
 }
+
+@Composable
+private fun SingularityAtmosphere(
+    palette: MistPalette,
+    animationEnabled: Boolean
+) {
+    Canvas(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        val center = Offset(
+            x = size.width * 0.5f,
+            y = size.height * 0.42f
+        )
+
+        val radius = size.minDimension * 0.28f
+
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    palette.primary.copy(alpha = 0.16f),
+                    palette.secondary.copy(alpha = 0.07f),
+                    Color.Transparent
+                ),
+                center = center,
+                radius = radius * 2.4f
+            ),
+            radius = radius * 2.4f,
+            center = center
+        )
+
+        drawCircle(
+            color = Color.Black.copy(alpha = 0.75f),
+            radius = radius * 0.65f,
+            center = center
+        )
+
+        drawCircle(
+            color = palette.primary.copy(alpha = 0.35f),
+            radius = radius * 0.82f,
+            center = center,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 2.dp.toPx()
+            )
+        )
+
+        drawOval(
+            brush = Brush.sweepGradient(
+                colors = listOf(
+                    Color.Transparent,
+                    palette.primary.copy(alpha = 0.65f),
+                    palette.secondary.copy(alpha = 0.8f),
+                    Color.Transparent,
+                    palette.primary.copy(alpha = 0.5f)
+                ),
+                center = center
+            ),
+            topLeft = Offset(
+                center.x - radius * 1.3f,
+                center.y - radius * 0.38f
+            ),
+            size = Size(
+                radius * 2.6f,
+                radius * 0.76f
+            ),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 3.dp.toPx()
+            )
+        )
+    }
+}
+
