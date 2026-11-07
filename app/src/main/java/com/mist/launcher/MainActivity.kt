@@ -1,10 +1,7 @@
 
-            
-
-
-
 package com.mist.launcher
 
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
@@ -23,20 +20,20 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -71,12 +68,174 @@ class MainActivity : ComponentActivity() {
         setContent {
             var apps by remember { mutableStateOf(loadApps()) }
 
+            var update by remember { mutableStateOf<MistUpdate?>(null) }
+            var updateStatus by remember {
+                mutableStateOf("Preparing update service...")
+            }
+
+            var downloadProgress by remember {
+                mutableIntStateOf(0)
+            }
+
+            var downloading by remember {
+                mutableStateOf(false)
+            }
+
+            var verifiedFile by remember {
+                mutableStateOf<File?>(null)
+            }
+
+            var updateScreen by remember {
+                mutableStateOf(false)
+            }
+
+            val versionInfo = remember {
+                packageManager.getPackageInfo(packageName, 0)
+            }
+
+            val currentVersion = versionInfo.versionName ?: "Unknown"
+
+            val currentVersionCode = remember {
+                if (android.os.Build.VERSION.SDK_INT >= 28) {
+                    versionInfo.longVersionCode.toInt()
+                } else {
+                    @Suppress("DEPRECATION")
+                    versionInfo.versionCode
+                }
+            }
+
+            // Automatic update check on startup.
+            LaunchedEffect(Unit) {
+                updateStatus = "Checking for updates..."
+
+                UpdateManager.checkForUpdates(currentVersionCode) { result ->
+                    when (result) {
+                        is UpdateResult.Available -> {
+                            update = result.update
+                            updateStatus = "A new MIST update is available."
+                        }
+
+                        is UpdateResult.UpToDate -> {
+                            update = null
+                            updateStatus = "MIST is up to date."
+                        }
+
+                        is UpdateResult.Failed -> {
+                            updateStatus = result.message
+                        }
+                    }
+                }
+            }
+
             MistHome(
                 apps = apps,
-                onRefresh = { apps = loadApps() },
-                onOpenApp = { packageName ->
-                    packageManager.getLaunchIntentForPackage(packageName)
+                onRefresh = {
+                    apps = loadApps()
+                },
+                onOpenApp = { appPackage ->
+                    packageManager.getLaunchIntentForPackage(appPackage)
                         ?.let { startActivity(it) }
+                },
+
+                showUpdateScreen = updateScreen,
+                onOpenUpdates = {
+                    updateScreen = true
+                },
+                onCloseUpdates = {
+                    updateScreen = false
+                },
+
+                currentVersion = currentVersion,
+                updateStatus = updateStatus,
+                update = update,
+                downloadProgress = downloadProgress,
+                isDownloading = downloading,
+                isVerified = verifiedFile != null,
+
+                onCheckUpdates = {
+                    updateStatus = "Checking for updates..."
+
+                    UpdateManager.checkForUpdates(currentVersionCode) { result ->
+                        when (result) {
+                            is UpdateResult.Available -> {
+                                update = result.update
+                                verifiedFile = null
+                                updateStatus = "A new MIST update is available."
+                            }
+
+                            is UpdateResult.UpToDate -> {
+                                update = null
+                                verifiedFile = null
+                                updateStatus = "MIST is up to date."
+                            }
+
+                            is UpdateResult.Failed -> {
+                                updateStatus = result.message
+                            }
+                        }
+                    }
+                },
+
+                onDownload = {
+                    val availableUpdate = update
+
+                    if (availableUpdate != null && !downloading) {
+                        downloading = true
+                        downloadProgress = 0
+                        verifiedFile = null
+                        updateStatus = "Downloading update..."
+
+                        UpdateDownloader.download(
+                            update = availableUpdate,
+                            cacheDir = cacheDir,
+                            onProgress = { progress ->
+                                downloadProgress = progress
+                            },
+                            callback = { result ->
+                                downloading = false
+
+                                when (result) {
+                                    is DownloadResult.Success -> {
+                                        verifiedFile = result.file
+                                        updateStatus =
+                                            "Download complete. Checksum verified."
+                                    }
+
+                                    is DownloadResult.Failed -> {
+                                        verifiedFile = null
+                                        updateStatus = result.message
+                                    }
+                                }
+                            }
+                        )
+                    }
+                },
+
+                onInstall = {
+                    val file = verifiedFile
+
+                    if (file != null) {
+                        val result = UpdateInstaller.install(
+                            activity = this@MainActivity,
+                            apkFile = file
+                        )
+
+                        when (result) {
+                            is InstallResult.Launched -> {
+                                updateStatus =
+                                    "Android installer opened. Approve the update."
+                            }
+
+                            is InstallResult.NeedsPermission -> {
+                                updateStatus =
+                                    "Allow MIST to install updates, then tap Install again."
+                            }
+
+                            is InstallResult.Failed -> {
+                                updateStatus = result.message
+                            }
+                        }
+                    }
                 }
             )
         }
@@ -87,12 +246,29 @@ class MainActivity : ComponentActivity() {
 private fun MistHome(
     apps: List<ResolveInfo>,
     onRefresh: () -> Unit,
-    onOpenApp: (String) -> Unit
+    onOpenApp: (String) -> Unit,
+
+    showUpdateScreen: Boolean,
+    onOpenUpdates: () -> Unit,
+    onCloseUpdates: () -> Unit,
+
+    currentVersion: String,
+    updateStatus: String,
+    update: MistUpdate?,
+    downloadProgress: Int,
+    isDownloading: Boolean,
+    isVerified: Boolean,
+
+    onCheckUpdates: () -> Unit,
+    onDownload: () -> Unit,
+    onInstall: () -> Unit
 ) {
     var drawerOpen by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf("") }
     var clock by remember { mutableStateOf(currentTime()) }
     var date by remember { mutableStateOf(currentDate()) }
+
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -101,8 +277,6 @@ private fun MistHome(
             delay(30_000)
         }
     }
-
-    val context = LocalContext.current
 
     val filteredApps = remember(apps, search) {
         apps.filter {
@@ -119,7 +293,44 @@ private fun MistHome(
     ) {
         ForestAtmosphere()
 
-        if (drawerOpen) {
+        if (showUpdateScreen) {
+
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Text(
+                        "CLOSE",
+                        color = MistBlue,
+                        fontSize = 11.sp,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable { onCloseUpdates() }
+                            .padding(12.dp)
+                    )
+                }
+
+                MistUpdateScreen(
+                    currentVersion = currentVersion,
+                    status = updateStatus,
+                    update = update,
+                    downloadProgress = downloadProgress,
+                    isDownloading = isDownloading,
+                    isVerified = isVerified,
+                    onCheckUpdates = onCheckUpdates,
+                    onDownload = onDownload,
+                    onInstall = onInstall
+                )
+            }
+
+        } else if (drawerOpen) {
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -141,6 +352,7 @@ private fun MistHome(
                             fontSize = 18.sp,
                             letterSpacing = 5.sp
                         )
+
                         Text(
                             "APPLICATION LIBRARY",
                             color = Muted,
@@ -209,6 +421,7 @@ private fun MistHome(
                         filteredApps,
                         key = { it.activityInfo.packageName }
                     ) { app ->
+
                         val name = app.loadLabel(
                             context.packageManager
                         ).toString()
@@ -247,7 +460,9 @@ private fun MistHome(
                     }
                 }
             }
+
         } else {
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -255,6 +470,7 @@ private fun MistHome(
                     .navigationBarsPadding()
                     .padding(horizontal = 25.dp)
             ) {
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -270,6 +486,7 @@ private fun MistHome(
                             letterSpacing = 5.sp,
                             fontWeight = FontWeight.Light
                         )
+
                         Text(
                             "S I L E N T   F O R E S T",
                             color = Muted,
@@ -278,15 +495,16 @@ private fun MistHome(
                         )
                     }
 
-                    Box(
+                    Text(
+                        "↻",
+                        color = MistBlue,
+                        fontSize = 22.sp,
                         modifier = Modifier
-                            .size(38.dp)
                             .clip(CircleShape)
-                            .background(Glass),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("◐", color = MistBlue, fontSize = 19.sp)
-                    }
+                            .background(Glass)
+                            .clickable { onOpenUpdates() }
+                            .padding(horizontal = 11.dp, vertical = 5.dp)
+                    )
                 }
 
                 Spacer(Modifier.height(48.dp))
@@ -348,6 +566,7 @@ private fun MistHome(
                     }
                 }
 
+                
                 Spacer(Modifier.weight(1f))
 
                 Row(
@@ -381,6 +600,7 @@ private fun MistHome(
                     horizontalArrangement = Arrangement.spacedBy(13.dp)
                 ) {
                     apps.take(5).forEach { app ->
+
                         val name = app.loadLabel(
                             context.packageManager
                         ).toString()
@@ -471,14 +691,17 @@ private fun currentDate(): String =
 private fun drawableBitmap(drawable: Drawable): Bitmap {
     val width = drawable.intrinsicWidth.coerceAtLeast(1)
     val height = drawable.intrinsicHeight.coerceAtLeast(1)
+
     val bitmap = Bitmap.createBitmap(
         width.coerceAtMost(192),
         height.coerceAtMost(192),
         Bitmap.Config.ARGB_8888
     )
+
     val canvas = AndroidCanvas(bitmap)
     drawable.setBounds(0, 0, canvas.width, canvas.height)
     drawable.draw(canvas)
+
     return bitmap
 }
 
@@ -517,7 +740,7 @@ private fun ForestAtmosphere() {
             )
         )
 
-        // Distant forest silhouettes
+        // Distant forest
         for (i in 0..9) {
             val x = w * i / 9f
             val base = h * (0.78f + (i % 3) * 0.025f)
@@ -549,7 +772,7 @@ private fun ForestAtmosphere() {
             drawPath(tree, Color(0xFF0A1520))
         }
 
-        // Static mist layers
+        // Static mist
         drawRect(
             brush = Brush.verticalGradient(
                 colors = listOf(
@@ -564,3 +787,7 @@ private fun ForestAtmosphere() {
         )
     }
 }
+
+
+
+
