@@ -786,3 +786,78 @@ private fun ScreenHeader(
     }
 }
 
+@Composable
+private fun SettingsPage(
+    title: String,
+    onBack: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        ScreenHeader(title, onBack)
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .weight(1f)
+                .padding(horizontal = 20.dp),
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun SmallAction(
+    symbol: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = Color.White.copy(alpha = 0.08f),
+        shape = CircleShape,
+        modifier = Modifier
+            .size(42.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                symbol,
+                color = Color.White,
+                fontSize = 21.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeButton(
+    title: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = Color.White.copy(alpha = 0.07f),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier.padding(18.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                title,
+                color = Color.White,
+                fontSize = 10.sp,
+                letterSpacing = 2.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
