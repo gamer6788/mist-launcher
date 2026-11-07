@@ -1,7 +1,6 @@
 
 package com.mist.launcher
 
-import android.app.Activity
 import android.content.Intent
 import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
@@ -9,8 +8,10 @@ import android.graphics.Canvas as AndroidCanvas
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -38,11 +39,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val Obsidian = Color(0xFF080D16)
-private val Silver = Color(0xFFE1EAF3)
-private val MistBlue = Color(0xFF9BBBD4)
-private val Muted = Color(0xFF9BAFC0)
-private val Glass = Color(0xB51B2B3D)
+private val Silver = Color(0xFFE9E8F5)
+private val Muted = Color(0xFFAAA8BE)
+private val Glass = Color(0xB51A192B)
 
 class MainActivity : ComponentActivity() {
 
@@ -62,13 +61,26 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        window.statusBarColor = android.graphics.Color.rgb(8, 13, 22)
-        window.navigationBarColor = android.graphics.Color.rgb(8, 13, 22)
+        window.statusBarColor = android.graphics.Color.rgb(8, 7, 18)
+        window.navigationBarColor = android.graphics.Color.rgb(8, 7, 18)
 
         setContent {
-            var apps by remember { mutableStateOf(loadApps()) }
+            var preferences by remember {
+                mutableStateOf(MistPreferences.load(this@MainActivity))
+            }
 
-            var update by remember { mutableStateOf<MistUpdate?>(null) }
+            var apps by remember {
+                mutableStateOf(loadApps())
+            }
+
+            var introVisible by remember {
+                mutableStateOf(preferences.introEnabled)
+            }
+
+            var update by remember {
+                mutableStateOf<MistUpdate?>(null)
+            }
+
             var updateStatus by remember {
                 mutableStateOf("Preparing update service...")
             }
@@ -104,7 +116,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Automatic update check on startup.
             LaunchedEffect(Unit) {
                 updateStatus = "Checking for updates..."
 
@@ -127,117 +138,143 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            MistHome(
-                apps = apps,
-                onRefresh = {
-                    apps = loadApps()
-                },
-                onOpenApp = { appPackage ->
-                    packageManager.getLaunchIntentForPackage(appPackage)
-                        ?.let { startActivity(it) }
-                },
+            MistThemeProvider(theme = preferences.theme) {
+                Box(Modifier.fillMaxSize()) {
 
-                showUpdateScreen = updateScreen,
-                onOpenUpdates = {
-                    updateScreen = true
-                },
-                onCloseUpdates = {
-                    updateScreen = false
-                },
+                    MistHome(
+                        apps = apps,
+                        preferences = preferences,
 
-                currentVersion = currentVersion,
-                updateStatus = updateStatus,
-                update = update,
-                downloadProgress = downloadProgress,
-                isDownloading = downloading,
-                isVerified = verifiedFile != null,
+                        onPreferencesChanged = {
+                            preferences = MistPreferences.load(this@MainActivity)
+                        },
 
-                onCheckUpdates = {
-                    updateStatus = "Checking for updates..."
+                        onRefresh = {
+                            apps = loadApps()
+                        },
 
-                    UpdateManager.checkForUpdates(currentVersionCode) { result ->
-                        when (result) {
-                            is UpdateResult.Available -> {
-                                update = result.update
-                                verifiedFile = null
-                                updateStatus = "A new MIST update is available."
-                            }
+                        onOpenApp = { appPackage ->
+                            packageManager
+                                .getLaunchIntentForPackage(appPackage)
+                                ?.let { startActivity(it) }
+                        },
 
-                            is UpdateResult.UpToDate -> {
-                                update = null
-                                verifiedFile = null
-                                updateStatus = "MIST is up to date."
-                            }
+                        showUpdateScreen = updateScreen,
 
-                            is UpdateResult.Failed -> {
-                                updateStatus = result.message
-                            }
-                        }
-                    }
-                },
+                        onOpenUpdates = {
+                            updateScreen = true
+                        },
 
-                onDownload = {
-                    val availableUpdate = update
+                        onCloseUpdates = {
+                            updateScreen = false
+                        },
 
-                    if (availableUpdate != null && !downloading) {
-                        downloading = true
-                        downloadProgress = 0
-                        verifiedFile = null
-                        updateStatus = "Downloading update..."
+                        currentVersion = currentVersion,
+                        updateStatus = updateStatus,
+                        update = update,
+                        downloadProgress = downloadProgress,
+                        isDownloading = downloading,
+                        isVerified = verifiedFile != null,
 
-                        UpdateDownloader.download(
-                            update = availableUpdate,
-                            cacheDir = cacheDir,
-                            onProgress = { progress ->
-                                downloadProgress = progress
-                            },
-                            callback = { result ->
-                                downloading = false
+                        onCheckUpdates = {
+                            updateStatus = "Checking for updates..."
 
+                            UpdateManager.checkForUpdates(currentVersionCode) { result ->
                                 when (result) {
-                                    is DownloadResult.Success -> {
-                                        verifiedFile = result.file
-                                        updateStatus =
-                                            "Download complete. Checksum verified."
+                                    is UpdateResult.Available -> {
+                                        update = result.update
+                                        verifiedFile = null
+                                        updateStatus = "A new MIST update is available."
                                     }
 
-                                    is DownloadResult.Failed -> {
+                                    is UpdateResult.UpToDate -> {
+                                        update = null
                                         verifiedFile = null
+                                        updateStatus = "MIST is up to date."
+                                    }
+
+                                    is UpdateResult.Failed -> {
                                         updateStatus = result.message
                                     }
                                 }
                             }
-                        )
-                    }
-                },
+                        },
 
-                onInstall = {
-                    val file = verifiedFile
+                        onDownload = {
+                            val availableUpdate = update
 
-                    if (file != null) {
-                        val result = UpdateInstaller.install(
-                            activity = this@MainActivity,
-                            apkFile = file
-                        )
+                            if (availableUpdate != null && !downloading) {
+                                downloading = true
+                                downloadProgress = 0
+                                verifiedFile = null
+                                updateStatus = "Downloading update..."
 
-                        when (result) {
-                            is InstallResult.Launched -> {
-                                updateStatus =
-                                    "Android installer opened. Approve the update."
+                                UpdateDownloader.download(
+                                    update = availableUpdate,
+                                    cacheDir = cacheDir,
+                                    onProgress = { progress ->
+                                        downloadProgress = progress
+                                    },
+                                    callback = { result ->
+                                        downloading = false
+
+                                        when (result) {
+                                            is DownloadResult.Success -> {
+                                                verifiedFile = result.file
+                                                updateStatus =
+                                                    "Download complete. Checksum verified."
+                                            }
+
+                                            is DownloadResult.Failed -> {
+                                                verifiedFile = null
+                                                updateStatus = result.message
+                                            }
+                                        }
+                                    }
+                                )
                             }
+                        },
 
-                            is InstallResult.NeedsPermission -> {
-                                updateStatus =
-                                    "Allow MIST to install updates, then tap Install again."
-                            }
+                        onInstall = {
+                            val file = verifiedFile
 
-                            is InstallResult.Failed -> {
-                                updateStatus = result.message
+                            if (file != null) {
+                                when (
+                                    val result = UpdateInstaller.install(
+                                        activity = this@MainActivity,
+                                        apkFile = file
+                                    )
+                                ) {
+                                    is InstallResult.Launched -> {
+                                        updateStatus =
+                                            "Android installer opened. Approve the update."
+                                    }
+
+                                    is InstallResult.NeedsPermission -> {
+                                        updateStatus =
+                                            "Allow MIST to install updates, then tap Install again."
+                                    }
+
+                                    is InstallResult.Failed -> {
+                                        updateStatus = result.message
+                                    }
+                                }
                             }
                         }
+                    )
+
+                    if (introVisible) {
+                        SingularityIntro(
+                            onFinished = {
+                                introVisible = false
+                            },
+                            onSkip = {
+                                introVisible = false
+                            }
+                        )
                     }
                 }
-            )
+            }
         }
     }
 }
@@ -245,6 +282,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun MistHome(
     apps: List<ResolveInfo>,
+    preferences: MistUserPreferences,
+    onPreferencesChanged: () -> Unit,
     onRefresh: () -> Unit,
     onOpenApp: (String) -> Unit,
 
@@ -263,12 +302,23 @@ private fun MistHome(
     onDownload: () -> Unit,
     onInstall: () -> Unit
 ) {
-    var drawerOpen by remember { mutableStateOf(false) }
+    var screen by remember { mutableStateOf("home") }
     var search by remember { mutableStateOf("") }
+
     var clock by remember { mutableStateOf(currentTime()) }
     var date by remember { mutableStateOf(currentDate()) }
 
     val context = LocalContext.current
+
+    BackHandler(
+        enabled = screen != "home" || showUpdateScreen
+    ) {
+        if (showUpdateScreen) {
+            onCloseUpdates()
+        } else {
+            screen = "home"
+        }
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -286,508 +336,343 @@ private fun MistHome(
         }
     }
 
+    val palette = MistDesignSystem.paletteFor(preferences.theme)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Obsidian)
+            .background(palette.background)
     ) {
-        ForestAtmosphere()
+        SingularityAtmosphere(
+            color = palette.primary,
+            enabled = preferences.backgroundAnimationEnabled &&
+                !preferences.reducedMotion
+        )
 
-        if (showUpdateScreen) {
+        when {
+            showUpdateScreen -> {
+                Column(Modifier.fillMaxSize()) {
+                    HeaderAction("CLOSE") {
+                        onCloseUpdates()
+                    }
 
-            Column(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    Text(
-                        "CLOSE",
-                        color = MistBlue,
-                        fontSize = 11.sp,
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .clickable { onCloseUpdates() }
-                            .padding(12.dp)
+                    MistUpdateScreen(
+                        currentVersion = currentVersion,
+                        status = updateStatus,
+                        update = update,
+                        downloadProgress = downloadProgress,
+                        isDownloading = isDownloading,
+                        isVerified = isVerified,
+                        onCheckUpdates = onCheckUpdates,
+                        onDownload = onDownload,
+                        onInstall = onInstall
                     )
                 }
-
-                MistUpdateScreen(
-                    currentVersion = currentVersion,
-                    status = updateStatus,
-                    update = update,
-                    downloadProgress = downloadProgress,
-                    isDownloading = isDownloading,
-                    isVerified = isVerified,
-                    onCheckUpdates = onCheckUpdates,
-                    onDownload = onDownload,
-                    onInstall = onInstall
-                )
             }
 
-        } else if (drawerOpen) {
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 22.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 18.dp, bottom = 24.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            screen == "drawer" -> {
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp)
                 ) {
-                    Column {
-                        Text(
-                            "M I S T",
-                            color = Silver,
-                            fontSize = 18.sp,
-                            letterSpacing = 5.sp
-                        )
+                    ScreenHeader(
+                        title = "APPLICATION LIBRARY",
+                        onBack = { screen = "home" }
+                    )
 
-                        Text(
-                            "APPLICATION LIBRARY",
-                            color = Muted,
-                            fontSize = 9.sp,
-                            letterSpacing = 2.sp
+                    Surface(
+                        color = Glass,
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        BasicTextField(
+                            value = search,
+                            onValueChange = { search = it },
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = Silver,
+                                fontSize = 15.sp
+                            ),
+                            decorationBox = { inner ->
+                                Box(Modifier.padding(16.dp)) {
+                                    if (search.isEmpty()) {
+                                        Text(
+                                            "Search applications",
+                                            color = Muted
+                                        )
+                                    }
+                                    inner()
+                                }
+                            }
                         )
                     }
 
-                    Text(
-                        "CLOSE",
-                        color = MistBlue,
-                        fontSize = 11.sp,
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .clickable { drawerOpen = false }
-                            .padding(12.dp)
-                    )
-                }
+                    Spacer(Modifier.height(18.dp))
 
-                Surface(
-                    color = Glass,
-                    shape = RoundedCornerShape(20.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    BasicTextField(
-                        value = search,
-                        onValueChange = { search = it },
-                        singleLine = true,
-                        textStyle = androidx.compose.ui.text.TextStyle(
-                            color = Silver,
-                            fontSize = 15.sp
-                        ),
-                        decorationBox = { inner ->
-                            Box(Modifier.padding(17.dp)) {
-                                if (search.isEmpty()) {
-                                    Text(
-                                        "Search applications",
-                                        color = Muted,
-                                        fontSize = 14.sp
-                                    )
-                                }
-                                inner()
+                    Text(
+                        "${filteredApps.size} APPLICATIONS",
+                        color = Muted,
+                        fontSize = 10.sp,
+                        letterSpacing = 2.sp
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(4),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        items(
+                            filteredApps,
+                            key = { it.activityInfo.packageName }
+                        ) { app ->
+                            val name = remember(app) {
+                                app.loadLabel(context.packageManager).toString()
+                            }
+
+                            val icon = remember(app) {
+                                drawableBitmap(
+                                    app.loadIcon(context.packageManager)
+                                )
+                            }
+
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onOpenApp(app.activityInfo.packageName)
+                                    }
+                            ) {
+                                Image(
+                                    bitmap = icon.asImageBitmap(),
+                                    contentDescription = name,
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                )
+
+                                Spacer(Modifier.height(6.dp))
+
+                                Text(
+                                    name,
+                                    color = palette.textPrimary,
+                                    fontSize = 10.sp,
+                                    maxLines = 1
+                                )
                             }
                         }
-                    )
-                }
-
-                Spacer(Modifier.height(22.dp))
-
-                Text(
-                    "${filteredApps.size} APPLICATIONS",
-                    color = Muted,
-                    fontSize = 10.sp,
-                    letterSpacing = 2.sp
-                )
-
-                Spacer(Modifier.height(14.dp))
-
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(4),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    items(
-                        filteredApps,
-                        key = { it.activityInfo.packageName }
-                    ) { app ->
-
-                        val name = app.loadLabel(
-                            context.packageManager
-                        ).toString()
-
-                        val icon = remember(app) {
-                            drawableBitmap(
-                                app.loadIcon(context.packageManager)
-                            )
-                        }
-
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onOpenApp(app.activityInfo.packageName)
-                                }
-                        ) {
-                            androidx.compose.foundation.Image(
-                                bitmap = icon.asImageBitmap(),
-                                contentDescription = name,
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                            )
-
-                            Spacer(Modifier.height(7.dp))
-
-                            Text(
-                                name,
-                                color = Silver,
-                                fontSize = 10.sp,
-                                maxLines = 1
-                            )
-                        }
                     }
                 }
             }
 
-        } else {
+            screen == "appearance" -> {
+                SettingsPage(
+                    title = "APPEARANCE",
+                    onBack = { screen = "home" }
+                ) {
+                    MistAppearanceScreen()
+                }
+            }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 25.dp)
-            ) {
+            screen == "experience" -> {
+                SettingsPage(
+                    title = "EXPERIENCE",
+                    onBack = { screen = "home" }
+                ) {
+                    MistExperienceSettings()
+                }
+            }
 
-                Row(
+            else -> {
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 24.dp)
                 ) {
-                    Column {
-                        Text(
-                            "M I S T",
-                            color = Silver,
-                            fontSize = 18.sp,
-                            letterSpacing = 5.sp,
-                            fontWeight = FontWeight.Light
-                        )
-
-                        Text(
-                            "S I L E N T   F O R E S T",
-                            color = Muted,
-                            fontSize = 8.sp,
-                            letterSpacing = 2.sp
-                        )
-                    }
-
-                    Text(
-                        "↻",
-                        color = MistBlue,
-                        fontSize = 22.sp,
+                    Row(
                         modifier = Modifier
-                            .clip(CircleShape)
-                            .background(Glass)
-                            .clickable { onOpenUpdates() }
-                            .padding(horizontal = 11.dp, vertical = 5.dp)
-                    )
-                }
+                            .fillMaxWidth()
+                            .padding(top = 20.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "M I S T",
+                                color = palette.textPrimary,
+                                fontSize = 21.sp,
+                                letterSpacing = 6.sp,
+                                fontWeight = FontWeight.Light
+                            )
 
-                Spacer(Modifier.height(48.dp))
+                            Text(
+                                "BEYOND THE ORDINARY",
+                                color = palette.textSecondary,
+                                fontSize = 8.sp,
+                                letterSpacing = 2.sp
+                            )
+                        }
 
-                Text(
-                    date.uppercase(),
-                    color = MistBlue,
-                    fontSize = 10.sp,
-                    letterSpacing = 2.sp
-                )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SmallAction("⚙") {
+                                screen = "appearance"
+                            }
 
-                Text(
-                    clock,
-                    color = Silver,
-                    fontSize = 76.sp,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Light,
-                    letterSpacing = (-3).sp
-                )
-
-                Text(
-                    "FIND YOUR STILLNESS.",
-                    color = Muted,
-                    fontSize = 9.sp,
-                    letterSpacing = 3.sp
-                )
-
-                Spacer(Modifier.height(30.dp))
-
-                Surface(
-                    color = Glass,
-                    shape = RoundedCornerShape(25.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(Modifier.padding(20.dp)) {
-                        Text(
-                            "THE SILENT FOREST",
-                            color = MistBlue,
-                            fontSize = 9.sp,
-                            letterSpacing = 2.sp
-                        )
-
-                        Spacer(Modifier.height(10.dp))
-
-                        Text(
-                            "A world away from the noise.",
-                            color = Silver,
-                            fontSize = 21.sp,
-                            fontFamily = FontFamily.Serif
-                        )
-
-                        Spacer(Modifier.height(7.dp))
-
-                        Text(
-                            "Take a moment. Breathe.",
-                            color = Muted,
-                            fontSize = 12.sp
-                        )
+                            SmallAction("↻") {
+                                onOpenUpdates()
+                            }
+                        }
                     }
-                }
 
-                
-                Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.height(48.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
                     Text(
-                        "YOUR FAVOURITES",
-                        color = Muted,
-                        fontSize = 9.sp,
+                        date.uppercase(),
+                        color = palette.primary,
+                        fontSize = 10.sp,
                         letterSpacing = 2.sp
                     )
 
                     Text(
-                        "ALL APPS ↗",
-                        color = MistBlue,
-                        fontSize = 9.sp,
-                        letterSpacing = 1.sp,
-                        modifier = Modifier.clickable {
-                            search = ""
-                            onRefresh()
-                            drawerOpen = true
-                        }
-                    )
-                }
+                        clock,
+                        color = palette.textPrimary,
+                        fontSize = 76.sp,
+fontFamily = FontFamily.Serif,
+fontWeight = FontWeight.Light,
+letterSpacing = (-3).sp
+)
 
-                Spacer(Modifier.height(16.dp))
+Text(
+    "TIME EXISTS BEYOND THE VOID.",
+    color = palette.textSecondary,
+    fontSize = 9.sp,
+    letterSpacing = 2.sp
+)
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(13.dp)
-                ) {
-                    apps.take(5).forEach { app ->
+Spacer(Modifier.height(30.dp))
 
-                        val name = app.loadLabel(
-                            context.packageManager
-                        ).toString()
-
-                        val icon = remember(app) {
-                            drawableBitmap(
-                                app.loadIcon(context.packageManager)
-                            )
-                        }
-
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    onOpenApp(app.activityInfo.packageName)
-                                }
-                        ) {
-                            androidx.compose.foundation.Image(
-                                bitmap = icon.asImageBitmap(),
-                                contentDescription = name,
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(15.dp))
-                            )
-
-                            Spacer(Modifier.height(6.dp))
-
-                            Text(
-                                name,
-                                color = Silver,
-                                fontSize = 9.sp,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(22.dp))
-
-                Surface(
-                    color = Color(0xD927394B),
-                    shape = RoundedCornerShape(25.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            search = ""
-                            onRefresh()
-                            drawerOpen = true
-                        }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(17.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "⌕    EXPLORE APPLICATIONS",
-                            color = Silver,
-                            fontSize = 11.sp,
-                            letterSpacing = 1.5.sp
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(15.dp))
-
-                Text(
-                    "M I S T   •   F U S I O N",
-                    color = Muted,
-                    fontSize = 8.sp,
-                    letterSpacing = 2.sp,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
-
-                Spacer(Modifier.height(12.dp))
-            }
-        }
-    }
-}
-
-private fun currentTime(): String =
-    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-
-private fun currentDate(): String =
-    SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date())
-
-private fun drawableBitmap(drawable: Drawable): Bitmap {
-    val width = drawable.intrinsicWidth.coerceAtLeast(1)
-    val height = drawable.intrinsicHeight.coerceAtLeast(1)
-
-    val bitmap = Bitmap.createBitmap(
-        width.coerceAtMost(192),
-        height.coerceAtMost(192),
-        Bitmap.Config.ARGB_8888
-    )
-
-    val canvas = AndroidCanvas(bitmap)
-    drawable.setBounds(0, 0, canvas.width, canvas.height)
-    drawable.draw(canvas)
-
-    return bitmap
-}
-
-@Composable
-private fun ForestAtmosphere() {
-    Canvas(Modifier.fillMaxSize()) {
-        val w = size.width
-        val h = size.height
-
-        drawRect(
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    Color(0xFF080D16),
-                    Color(0xFF101D2A),
-                    Color(0xFF09131D)
-                )
-            )
+Surface(
+    color = palette.surface,
+    shape = RoundedCornerShape(25.dp),
+    modifier = Modifier.fillMaxWidth()
+) {
+    Column(Modifier.padding(20.dp)) {
+        Text(
+            "THE SINGULARITY",
+            color = palette.primary,
+            fontSize = 9.sp,
+            letterSpacing = 2.sp
         )
 
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color(0x405C829F),
-                    Color.Transparent
-                ),
-                center = androidx.compose.ui.geometry.Offset(
-                    w * 0.72f,
-                    h * 0.45f
-                ),
-                radius = w * 0.65f
-            ),
-            radius = w * 0.65f,
-            center = androidx.compose.ui.geometry.Offset(
-                w * 0.72f,
-                h * 0.45f
-            )
+        Spacer(Modifier.height(10.dp))
+
+        Text(
+            "Beyond the ordinary.",
+            color = palette.textPrimary,
+            fontSize = 23.sp,
+            fontFamily = FontFamily.Serif
         )
 
-        // Distant forest
-        for (i in 0..9) {
-            val x = w * i / 9f
-            val base = h * (0.78f + (i % 3) * 0.025f)
-            val treeHeight = h * (0.16f + (i % 4) * 0.025f)
+        Spacer(Modifier.height(7.dp))
 
-            val tree = Path().apply {
-                moveTo(x, base - treeHeight)
-                lineTo(x - w * 0.065f, base)
-                lineTo(x + w * 0.065f, base)
-                close()
-            }
-
-            drawPath(tree, Color(0xFF142332))
-        }
-
-        // Foreground forest
-        for (i in 0..7) {
-            val x = w * i / 7f
-            val base = h * 0.91f
-            val treeHeight = h * (0.23f + (i % 3) * 0.035f)
-
-            val tree = Path().apply {
-                moveTo(x, base - treeHeight)
-                lineTo(x - w * 0.085f, base)
-                lineTo(x + w * 0.085f, base)
-                close()
-            }
-
-            drawPath(tree, Color(0xFF0A1520))
-        }
-
-        // Static mist
-        drawRect(
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    Color.Transparent,
-                    Color(0x183D6079),
-                    Color(0x080B1723),
-                    Color.Transparent
-                ),
-                startY = h * 0.65f,
-                endY = h * 0.95f
-            )
+        Text(
+            "Enter your own atmosphere.",
+            color = palette.textSecondary,
+            fontSize = 12.sp
         )
     }
 }
 
+Spacer(Modifier.height(24.dp))
 
+Text(
+    "FAVOURITES",
+    color = palette.textSecondary,
+    fontSize = 9.sp,
+    letterSpacing = 2.sp
+)
 
+Spacer(Modifier.height(13.dp))
 
+Row(
+    modifier = Modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.spacedBy(13.dp)
+) {
+    apps.take(5).forEach { app ->
+        val name = remember(app) {
+            app.loadLabel(context.packageManager).toString()
+        }
+
+        val icon = remember(app) {
+            drawableBitmap(
+                app.loadIcon(context.packageManager)
+            )
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .weight(1f)
+                .clickable {
+                    onOpenApp(app.activityInfo.packageName)
+                }
+        ) {
+            Image(
+                bitmap = icon.asImageBitmap(),
+                contentDescription = name,
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(14.dp))
+            )
+
+            Spacer(Modifier.height(6.dp))
+
+            Text(
+                name,
+                color = palette.textPrimary,
+                fontSize = 9.sp,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+Spacer(Modifier.weight(1f))
+
+HomeButton("EXPLORE APPLICATIONS") {
+    search = ""
+    onRefresh()
+    screen = "drawer"
+}
+
+Spacer(Modifier.height(10.dp))
+
+HomeButton("APPEARANCE & GRAPHICS") {
+    screen = "appearance"
+}
+
+Spacer(Modifier.height(10.dp))
+
+HomeButton("MIST EXPERIENCE SETTINGS") {
+    screen = "experience"
+}
+
+Spacer(Modifier.height(16.dp))
+
+Text(
+    "M I S T  •  S I N G U L A R I T Y",
+    color = palette.textSecondary,
+    fontSize = 8.sp,
+    letterSpacing = 2.sp,
+    modifier = Modifier.align(Alignment.CenterHorizontally)
+)
+
+Spacer(Modifier.height(12.dp))
