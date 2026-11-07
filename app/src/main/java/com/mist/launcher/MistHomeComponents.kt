@@ -1,4 +1,5 @@
 
+
 package com.mist.launcher
 
 import androidx.compose.foundation.Canvas
@@ -11,10 +12,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
+
+// Shared MIST colours
+val Glass = Color(0x26FFFFFF)
+val Silver = Color(0xFFE0E6F0)
+val Muted = Color(0xFF9299AA)
 
 @Composable
 fun SingularityAtmosphere(
