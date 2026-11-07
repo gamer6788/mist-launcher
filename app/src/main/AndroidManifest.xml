@@ -1,5 +1,9 @@
+<?<
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <queries>
         <intent>
@@ -11,6 +15,7 @@
     <application
         android:allowBackup="true"
         android:label="MIST Launcher"
+        android:icon="@drawable/ic_mist_logo"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true">
 
@@ -32,4 +37,5 @@
         </activity>
 
     </application>
+
 </manifest>
