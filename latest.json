@@ -1,7 +1,7 @@
 {
-  "versionCode": 1059,
-  "versionName": "1.2.59",
-  "apkUrl": "https://github.com/gamer6788/mist-launcher/releases/download/v1.2.59/mist.apk",
-  "sha256": "9846414bf1283fc9a342eb58b4fb99b4f0080b19d6b455235ce882b68ed9e90b",
+  "versionCode": 1060,
+  "versionName": "1.2.60",
+  "apkUrl": "https://github.com/gamer6788/mist-launcher/releases/download/v1.2.60/mist.apk",
+  "sha256": "c354de2f95ff686b851889eb8740afbbf5097f2d3b944485703993493f0d139c",
   "releaseNotes": "Automatic MIST update release."
 }
