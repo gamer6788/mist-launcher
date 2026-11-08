@@ -13,8 +13,35 @@ android {
         applicationId = "com.mist.launcher"
         minSdk = 23
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.2.0"
+
+        versionCode = providers
+            .environmentVariable("MIST_VERSION_CODE")
+            .orElse("2")
+            .get()
+            .toInt()
+
+        versionName = providers
+            .environmentVariable("MIST_VERSION_NAME")
+            .orElse("1.2.0")
+            .get()
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file(
+                System.getenv("MIST_KEYSTORE_PATH") ?: "mist-release.jks"
+            )
+            storePassword = System.getenv("MIST_KEYSTORE_PASSWORD") ?: ""
+            keyAlias = System.getenv("MIST_KEY_ALIAS") ?: "mist"
+            keyPassword = System.getenv("MIST_KEY_PASSWORD") ?: ""
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+        }
     }
 
     buildFeatures {
@@ -44,3 +71,6 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
+
+
+    
