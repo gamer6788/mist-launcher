@@ -2,188 +2,117 @@ name: Build and Publish MIST
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
 
-    env:
-      RELEASE_REPO: gamer6788/mist-releases
-
     steps:
-      - name: Checkout MIST source
+      - name: Checkout MIST
         uses: actions/checkout@v4
+        with:
+          ref: main
 
-      - name: Setup Java
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools'
-
-      - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Setup Gradle
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: 8.9
 
       - name: Set MIST version
+        shell: bash
         run: |
           echo "MIST_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
           echo "MIST_VERSION_NAME=1.2.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
-      - name: Restore and verify MIST signing key
+      - name: Restore MIST signing key
         env:
           MIST_KEYSTORE_BASE64: ${{ secrets.MIST_KEYSTORE_BASE64 }}
         run: |
-          python3 - <<'PY'
-          import os
-          import base64
-          import re
-          import sys
+          test -n "$MIST_KEYSTORE_BASE64"
+          mkdir -p app
+          printf '%s' "$MIST_KEYSTORE_BASE64" | base64 --decode > app/mist-release.jks
+          test -s app/mist-release.jks
 
-          data = os.environ.get("MIST_KEYSTORE_BASE64", "")
-
-          print("Secret received:", bool(data))
-          print("Secret length:", len(data))
-
-          if not data:
-              sys.exit("ERROR: GitHub secret is empty or unavailable")
-
-          data = re.sub(r"\s+", "", data)
-
-          try:
-              decoded = base64.b64decode(data, validate=True)
-          except Exception as e:
-              sys.exit(f"ERROR: Invalid Base64: {e}")
-
-          if not decoded:
-              sys.exit("ERROR: Decoded keystore is empty")
-
-          path = os.path.join(
-              os.environ["RUNNER_TEMP"],
-              "mist-release.jks"
-          )
-
-          with open(path, "wb") as f:
-              f.write(decoded)
-
-          print("Base64 decoding: SUCCESS")
-          print("Keystore restored successfully")
-          print("Keystore size:", len(decoded), "bytes")
-          PY
-
-      - name: Build signed MIST release APK
+      - name: Build signed APK
         env:
-          MIST_KEYSTORE_PATH: ${{ runner.temp }}/mist-release.jks
+          MIST_KEYSTORE_PATH: mist-release.jks
           MIST_KEYSTORE_PASSWORD: ${{ secrets.MIST_KEYSTORE_PASSWORD }}
           MIST_KEY_ALIAS: ${{ secrets.MIST_KEY_ALIAS }}
           MIST_KEY_PASSWORD: ${{ secrets.MIST_KEY_PASSWORD }}
         run: |
-          gradle --stop
-          gradle clean assembleRelease \
-            --no-build-cache \
-            --rerun-tasks \
-            -Pkotlin.incremental=false
+          chmod +x gradlew
+          ./gradlew assembleRelease
 
-      - name: Calculate APK SHA-256
-        id: checksum
+      - name: Prepare APK and calculate SHA256
         run: |
           APK="app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
 
-          HASH=$(sha256sum "$APK" | awk '{print $1}')
+          cp "$APK" mist.apk
 
-          echo "sha256=$HASH" >> "$GITHUB_OUTPUT"
-          echo "APK SHA-256 calculated successfully"
+          SHA256=$(sha256sum mist.apk | awk '{print $1}')
+          echo "MIST_SHA256=$SHA256" >> "$GITHUB_ENV"
 
       - name: Publish APK release
         env:
-          GH_TOKEN: ${{ secrets.MIST_RELEASES_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          APK="app/build/outputs/apk/release/app-release.apk"
           TAG="v${MIST_VERSION_NAME}"
 
-          test -n "$GH_TOKEN"
-          test -s "$APK"
-
-          if gh release view "$TAG" --repo "$RELEASE_REPO" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$APK#MIST Launcher APK" \
-              --repo "$RELEASE_REPO" \
-              --clobber
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Updating existing release"
           else
-            gh release create "$TAG" "$APK#MIST Launcher APK" \
-              --repo "$RELEASE_REPO" \
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
               --title "MIST ${MIST_VERSION_NAME}" \
               --notes "Automatic MIST update release."
           fi
 
+          gh release upload "$TAG" mist.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
       - name: Generate update manifest
-        env:
-          APK_SHA256: ${{ steps.checksum.outputs.sha256 }}
         run: |
-          python3 - <<'PY'
-          import json
-          import os
+          APK_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${MIST_VERSION_NAME}/mist.apk"
 
-          version = os.environ["MIST_VERSION_NAME"]
-          tag = "v" + version
+          jq -n \
+            --argjson versionCode "$MIST_VERSION_CODE" \
+            --arg versionName "$MIST_VERSION_NAME" \
+            --arg apkUrl "$APK_URL" \
+            --arg sha256 "$MIST_SHA256" \
+            --arg releaseNotes "Automatic MIST update release." \
+            '{
+              versionCode: $versionCode,
+              versionName: $versionName,
+              apkUrl: $apkUrl,
+              sha256: $sha256,
+              releaseNotes: $releaseNotes
+            }' > latest.json
 
-          manifest = {
-              "versionCode": int(os.environ["MIST_VERSION_CODE"]),
-              "versionName": version,
-              "apkUrl": (
-                  "https://github.com/gamer6788/mist-releases/"
-                  f"releases/download/{tag}/app-release.apk"
-              ),
-              "sha256": os.environ["APK_SHA256"],
-              "releaseNotes": f"MIST {version} automatic update"
-          }
-
-          with open("latest.json", "w") as file:
-              json.dump(manifest, file, indent=2)
-
-          print("Update manifest generated successfully")
-          PY
-
-      - name: Publish latest.json
-        env:
-          GH_TOKEN: ${{ secrets.MIST_RELEASES_TOKEN }}
+      - name: Publish update manifest
         run: |
-          REPO="$RELEASE_REPO"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          FILE_SHA=$(gh api \
-            "repos/$REPO/contents/latest.json" \
-            --jq '.sha' 2>/dev/null || true)
+          git add latest.json
 
-          CONTENT=$(base64 -w 0 latest.json)
-
-          if [ -n "$FILE_SHA" ]; then
-            gh api --method PUT "repos/$REPO/contents/latest.json" \
-              -f message="Update MIST release manifest" \
-              -f content="$CONTENT" \
-              -f sha="$FILE_SHA"
-          else
-            gh api --method PUT "repos/$REPO/contents/latest.json" \
-              -f message="Create MIST release manifest" \
-              -f content="$CONTENT"
+          if ! git diff --cached --quiet; then
+            git commit -m "Update MIST update manifest"
+            git push origin HEAD:main
           fi
 
-      - name: Keep APK backup in Actions
-        uses: actions/upload-artifact@v4
-        with:
-          name: MIST-Launcher-APK
-          path: app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
-          retention-days: 30
+      - name: Clean signing key
+        if: always()
+        run: |
+          rm -f app/mist-release.jks
