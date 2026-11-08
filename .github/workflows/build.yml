@@ -1,5 +1,4 @@
-
-      name: Build and Publish MIST
+name: Build and Publish MIST
 
 on:
   push:
