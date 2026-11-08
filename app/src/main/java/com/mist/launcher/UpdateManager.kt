@@ -25,7 +25,7 @@ sealed class UpdateResult {
 object UpdateManager {
 
     private const val MANIFEST_URL =
-        "https://raw.githubusercontent.com/gamer6788/mist-releases/main/latest.json"
+        "https://raw.githubusercontent.com/gamer6788/mist-launcher/main/latest.json"
 
     private val executor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
