@@ -1,4 +1,3 @@
-
 name: Build and Publish MIST
 
 on:
@@ -15,8 +14,6 @@ jobs:
 
     env:
       RELEASE_REPO: gamer6788/mist-releases
-      MIST_VERSION_CODE: ${{ 1000 + github.run_number }}
-      MIST_VERSION_NAME: 1.2.${{ github.run_number }}
 
     steps:
       - name: Checkout MIST source
@@ -40,6 +37,11 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.9
+
+      - name: Set MIST version
+        run: |
+          echo "MIST_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          echo "MIST_VERSION_NAME=1.2.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
       - name: Restore MIST signing key
         env:
@@ -80,10 +82,16 @@ jobs:
 
           test -n "$GH_TOKEN"
 
-          gh release create "$TAG" "$APK#MIST Launcher APK" \
-            --repo "$RELEASE_REPO" \
-            --title "MIST ${MIST_VERSION_NAME}" \
-            --notes "Automatic MIST update release."
+          if gh release view "$TAG" --repo "$RELEASE_REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK#MIST Launcher APK" \
+              --repo "$RELEASE_REPO" \
+              --clobber
+          else
+            gh release create "$TAG" "$APK#MIST Launcher APK" \
+              --repo "$RELEASE_REPO" \
+              --title "MIST ${MIST_VERSION_NAME}" \
+              --notes "Automatic MIST update release."
+          fi
 
       - name: Generate update manifest
         env:
@@ -116,6 +124,7 @@ jobs:
           GH_TOKEN: ${{ secrets.MIST_RELEASES_TOKEN }}
         run: |
           REPO="$RELEASE_REPO"
+
           FILE_SHA=$(gh api \
             "repos/$REPO/contents/latest.json" \
             --jq '.sha' 2>/dev/null || true)
@@ -140,8 +149,5 @@ jobs:
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
-
-
+ 
       
-
-        
