@@ -50,7 +50,7 @@ jobs:
           MIST_KEY_ALIAS: ${{ secrets.MIST_KEY_ALIAS }}
           MIST_KEY_PASSWORD: ${{ secrets.MIST_KEY_PASSWORD }}
         run: |
-          gradle clean assembleRelease
+          gradle clean assembleRelease --no-daemon -Pkotlin.incremental=false
 
       - name: Prepare APK and calculate SHA256
         run: |
