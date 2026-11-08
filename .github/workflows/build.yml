@@ -1,9 +1,5 @@
 
-
-      
-
-        
-name: Build MIST
+name: Build and Publish MIST
 
 on:
   push:
@@ -14,11 +10,16 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  build-and-publish:
     runs-on: ubuntu-latest
 
+    env:
+      RELEASE_REPO: gamer6788/mist-releases
+      MIST_VERSION_CODE: ${{ 1000 + github.run_number }}
+      MIST_VERSION_NAME: 1.2.${{ github.run_number }}
+
     steps:
-      - name: Checkout source
+      - name: Checkout MIST source
         uses: actions/checkout@v4
 
       - name: Setup Java
@@ -40,12 +41,107 @@ jobs:
         with:
           gradle-version: 8.9
 
-      - name: Build MIST APK
-        run: gradle --stop && gradle clean assembleDebug --no-build-cache --rerun-tasks -Pkotlin.incremental=false
+      - name: Restore MIST signing key
+        env:
+          MIST_KEYSTORE_BASE64: ${{ secrets.MIST_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$MIST_KEYSTORE_BASE64"
+          printf '%s' "$MIST_KEYSTORE_BASE64" \
+            | base64 --decode > "$RUNNER_TEMP/mist-release.jks"
+          test -s "$RUNNER_TEMP/mist-release.jks"
 
-      - name: Upload MIST APK
+      - name: Build signed MIST release APK
+        env:
+          MIST_KEYSTORE_PATH: ${{ runner.temp }}/mist-release.jks
+          MIST_KEYSTORE_PASSWORD: ${{ secrets.MIST_KEYSTORE_PASSWORD }}
+          MIST_KEY_ALIAS: ${{ secrets.MIST_KEY_ALIAS }}
+          MIST_KEY_PASSWORD: ${{ secrets.MIST_KEY_PASSWORD }}
+        run: |
+          gradle --stop
+          gradle clean assembleRelease \
+            --no-build-cache \
+            --rerun-tasks \
+            -Pkotlin.incremental=false
+
+      - name: Calculate APK SHA-256
+        id: checksum
+        run: |
+          APK="app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK"
+          HASH=$(sha256sum "$APK" | awk '{print $1}')
+          echo "sha256=$HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Publish APK release
+        env:
+          GH_TOKEN: ${{ secrets.MIST_RELEASES_TOKEN }}
+        run: |
+          APK="app/build/outputs/apk/release/app-release.apk"
+          TAG="v${MIST_VERSION_NAME}"
+
+          test -n "$GH_TOKEN"
+
+          gh release create "$TAG" "$APK#MIST Launcher APK" \
+            --repo "$RELEASE_REPO" \
+            --title "MIST ${MIST_VERSION_NAME}" \
+            --notes "Automatic MIST update release."
+
+      - name: Generate update manifest
+        env:
+          APK_SHA256: ${{ steps.checksum.outputs.sha256 }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          version = os.environ["MIST_VERSION_NAME"]
+          tag = "v" + version
+
+          manifest = {
+              "versionCode": int(os.environ["MIST_VERSION_CODE"]),
+              "versionName": version,
+              "apkUrl": (
+                  "https://github.com/gamer6788/mist-releases/"
+                  f"releases/download/{tag}/app-release.apk"
+              ),
+              "sha256": os.environ["APK_SHA256"],
+              "releaseNotes": f"MIST {version} automatic update"
+          }
+
+          with open("latest.json", "w") as file:
+              json.dump(manifest, file, indent=2)
+          PY
+
+      - name: Publish latest.json
+        env:
+          GH_TOKEN: ${{ secrets.MIST_RELEASES_TOKEN }}
+        run: |
+          REPO="$RELEASE_REPO"
+          FILE_SHA=$(gh api \
+            "repos/$REPO/contents/latest.json" \
+            --jq '.sha' 2>/dev/null || true)
+
+          CONTENT=$(base64 -w 0 latest.json)
+
+          if [ -n "$FILE_SHA" ]; then
+            gh api --method PUT "repos/$REPO/contents/latest.json" \
+              -f message="Update MIST release manifest" \
+              -f content="$CONTENT" \
+              -f sha="$FILE_SHA"
+          else
+            gh api --method PUT "repos/$REPO/contents/latest.json" \
+              -f message="Create MIST release manifest" \
+              -f content="$CONTENT"
+          fi
+
+      - name: Keep APK backup in Actions
         uses: actions/upload-artifact@v4
         with:
           name: MIST-Launcher-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+          retention-days: 30
+
+
+      
+
+        
