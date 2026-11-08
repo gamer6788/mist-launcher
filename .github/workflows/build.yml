@@ -1,4 +1,5 @@
-name: Build and Publish MIST
+
+      name: Build and Publish MIST
 
 on:
   push:
@@ -43,14 +44,46 @@ jobs:
           echo "MIST_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
           echo "MIST_VERSION_NAME=1.2.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
-      - name: Restore MIST signing key
+      - name: Restore and verify MIST signing key
         env:
           MIST_KEYSTORE_BASE64: ${{ secrets.MIST_KEYSTORE_BASE64 }}
         run: |
-          test -n "$MIST_KEYSTORE_BASE64"
-          printf '%s' "$MIST_KEYSTORE_BASE64" \
-            | base64 --decode > "$RUNNER_TEMP/mist-release.jks"
-          test -s "$RUNNER_TEMP/mist-release.jks"
+          python3 - <<'PY'
+          import os
+          import base64
+          import re
+          import sys
+
+          data = os.environ.get("MIST_KEYSTORE_BASE64", "")
+
+          print("Secret received:", bool(data))
+          print("Secret length:", len(data))
+
+          if not data:
+              sys.exit("ERROR: GitHub secret is empty or unavailable")
+
+          data = re.sub(r"\s+", "", data)
+
+          try:
+              decoded = base64.b64decode(data, validate=True)
+          except Exception as e:
+              sys.exit(f"ERROR: Invalid Base64: {e}")
+
+          if not decoded:
+              sys.exit("ERROR: Decoded keystore is empty")
+
+          path = os.path.join(
+              os.environ["RUNNER_TEMP"],
+              "mist-release.jks"
+          )
+
+          with open(path, "wb") as f:
+              f.write(decoded)
+
+          print("Base64 decoding: SUCCESS")
+          print("Keystore restored successfully")
+          print("Keystore size:", len(decoded), "bytes")
+          PY
 
       - name: Build signed MIST release APK
         env:
@@ -70,8 +103,11 @@ jobs:
         run: |
           APK="app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
+
           HASH=$(sha256sum "$APK" | awk '{print $1}')
+
           echo "sha256=$HASH" >> "$GITHUB_OUTPUT"
+          echo "APK SHA-256 calculated successfully"
 
       - name: Publish APK release
         env:
@@ -81,6 +117,7 @@ jobs:
           TAG="v${MIST_VERSION_NAME}"
 
           test -n "$GH_TOKEN"
+          test -s "$APK"
 
           if gh release view "$TAG" --repo "$RELEASE_REPO" >/dev/null 2>&1; then
             gh release upload "$TAG" "$APK#MIST Launcher APK" \
@@ -117,6 +154,8 @@ jobs:
 
           with open("latest.json", "w") as file:
               json.dump(manifest, file, indent=2)
+
+          print("Update manifest generated successfully")
           PY
 
       - name: Publish latest.json
@@ -149,5 +188,3 @@ jobs:
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
- 
-      
