@@ -50,8 +50,7 @@ jobs:
           MIST_KEY_ALIAS: ${{ secrets.MIST_KEY_ALIAS }}
           MIST_KEY_PASSWORD: ${{ secrets.MIST_KEY_PASSWORD }}
         run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease
+          gradle clean assembleRelease
 
       - name: Prepare APK and calculate SHA256
         run: |
