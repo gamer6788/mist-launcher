@@ -5,31 +5,58 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
+    <!-- Deep cosmic background -->
     <path
-        android:fillColor="#080D16"
+        android:fillColor="#080B14"
         android:pathData="M0,0h108v108h-108z"/>
 
+    <!-- Outer gravitational accretion ring -->
     <path
-        android:fillColor="#DCE8F2"
-        android:pathData="M65,18
-            A28,28 0,1 0,65 72
-            A22,22 0,1 1,65 18Z"/>
+        android:fillColor="#00000000"
+        android:strokeColor="#526F91"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M13,55 C22,32 69,20 91,37 C108,50 91,72 65,79 C39,87 13,73 13,55Z"/>
+
+    <!-- Main luminous ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#D6E6F5"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M17,48 C34,28 72,27 90,43"/>
+
+    <!-- Lower blue light trail -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#789FC5"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M20,68 C40,84 73,77 89,59"/>
+
+    <!-- Black hole event horizon -->
+    <path
+        android:fillColor="#020307"
+        android:pathData="M54,29
+            A25,25 0,1 0,54 79
+            A25,25 0,1 0,54 29Z"/>
+
+    <!-- Subtle inner gravitational edge -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#24364C"
+        android:strokeWidth="1.5"
+        android:pathData="M54,32
+            A22,22 0,1 0,54 76
+            A22,22 0,1 0,54 32Z"/>
+
+    <!-- Accretion highlights -->
+    <path
+        android:fillColor="#EAF4FF"
+        android:pathData="M32,35 Q43,27 55,27 Q43,29 35,39Z"/>
 
     <path
-        android:fillColor="#9BBBD4"
-        android:pathData="M17,73
-            Q33,64 50,73
-            Q67,82 91,70
-            L91,76
-            Q69,89 50,80
-            Q32,72 17,81Z"/>
+        android:fillColor="#9DBDDC"
+        android:pathData="M72,76 Q82,70 87,62 Q85,73 72,76Z"/>
 
-    <path
-        android:fillColor="#789BB8"
-        android:pathData="M22,85
-            Q39,78 55,85
-            Q72,92 87,83
-            L87,88
-            Q70,98 53,91
-            Q37,84 22,91Z"/>
 </vector>
