@@ -5,58 +5,50 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Deep cosmic background -->
+    <!-- Deep black background -->
     <path
-        android:fillColor="#080B14"
+        android:fillColor="#030303"
         android:pathData="M0,0h108v108h-108z"/>
 
-    <!-- Outer gravitational accretion ring -->
+    <!-- Outer golden accretion glow -->
     <path
-        android:fillColor="#00000000"
-        android:strokeColor="#526F91"
-        android:strokeWidth="5"
-        android:strokeLineCap="round"
-        android:pathData="M13,55 C22,32 69,20 91,37 C108,50 91,72 65,79 C39,87 13,73 13,55Z"/>
+        android:fillColor="#805A2B"
+        android:pathData="M13,49
+            C25,23 62,13 88,34
+            C105,48 99,70 79,79
+            C57,89 27,78 15,64
+            C10,58 10,53 13,49Z"/>
 
-    <!-- Main luminous ring -->
+    <!-- Main warm-white accretion disk -->
     <path
-        android:fillColor="#00000000"
-        android:strokeColor="#D6E6F5"
-        android:strokeWidth="3"
-        android:strokeLineCap="round"
-        android:pathData="M17,48 C34,28 72,27 90,43"/>
+        android:fillColor="#E6C58B"
+        android:pathData="M12,49
+            C29,28 62,22 85,39
+            C98,49 94,62 77,70
+            C57,80 30,71 16,60
+            C11,56 10,52 12,49Z"/>
 
-    <!-- Lower blue light trail -->
+    <!-- Dark inner separation -->
     <path
-        android:fillColor="#00000000"
-        android:strokeColor="#789FC5"
-        android:strokeWidth="2"
-        android:strokeLineCap="round"
-        android:pathData="M20,68 C40,84 73,77 89,59"/>
+        android:fillColor="#17100B"
+        android:pathData="M14,51
+            C32,35 61,31 81,43
+            C91,49 88,58 75,64
+            C56,73 32,65 17,57
+            C13,55 12,53 14,51Z"/>
 
-    <!-- Black hole event horizon -->
+    <!-- Event horizon -->
     <path
-        android:fillColor="#020307"
-        android:pathData="M54,29
-            A25,25 0,1 0,54 79
-            A25,25 0,1 0,54 29Z"/>
+        android:fillColor="#000000"
+        android:pathData="M54,24
+            A30,30 0,1 0,54 84
+            A30,30 0,1 0,54 24Z"/>
 
-    <!-- Subtle inner gravitational edge -->
+    <!-- Subtle upper light -->
     <path
-        android:fillColor="#00000000"
-        android:strokeColor="#24364C"
-        android:strokeWidth="1.5"
-        android:pathData="M54,32
-            A22,22 0,1 0,54 76
-            A22,22 0,1 0,54 32Z"/>
-
-    <!-- Accretion highlights -->
-    <path
-        android:fillColor="#EAF4FF"
-        android:pathData="M32,35 Q43,27 55,27 Q43,29 35,39Z"/>
-
-    <path
-        android:fillColor="#9DBDDC"
-        android:pathData="M72,76 Q82,70 87,62 Q85,73 72,76Z"/>
+        android:fillColor="#FFF0D1"
+        android:pathData="M22,43
+            C38,27 63,25 78,36
+            C61,29 39,33 25,47Z"/>
 
 </vector>
